@@ -6,9 +6,9 @@ import { useMusic } from './useMusic'
 import { useRadio } from './useRadio'
 
 // 从服务器加载聊天记录
-const loadChatHistory = async (): Promise<Message[]> => {
+const loadChatHistory = async (uid: string): Promise<Message[]> => {
   try {
-    const response = await fetch('/api/chat/load')
+    const response = await fetch(`/api/chat/load?uid=${uid}`)
     const data = await response.json()
 
     if (data.messages && data.messages.length > 0) {
@@ -36,12 +36,7 @@ const loadChatHistory = async (): Promise<Message[]> => {
 const messages = ref<Message[]>([])
 const isLoading = ref(false)
 const isHistoryLoaded = ref(false)
-
-// 初始化加载聊天记录
-loadChatHistory().then(history => {
-  messages.value = history
-  isHistoryLoaded.value = true
-})
+const currentUid = ref<string>('')
 
 // 保存聊天记录到服务器
 const saveChatHistory = async () => {
@@ -49,9 +44,12 @@ const saveChatHistory = async () => {
     await fetch('/api/chat/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages.value })
+      body: JSON.stringify({
+        messages: messages.value,
+        uid: currentUid.value
+      })
     })
-    console.log('[Chat] History saved to server')
+    console.log('[Chat] History saved to server for user:', currentUid.value || 'guest')
   } catch (error) {
     console.error('Failed to save chat history:', error)
   }
@@ -74,8 +72,31 @@ watch(
 
 export function useChat() {
   const { playByKeyword, pause, resume, next, previous, currentTrack, isPlaying, volume } = usePlayer()
-  const { searchSongs, toggleLike } = useMusic()
+  const { searchSongs, toggleLike, uid } = useMusic()
   const { playProgram, stopRadio, isRadioMode } = useRadio()
+
+  // 初始化聊天记录（根据用户 ID）
+  const initChat = async () => {
+    currentUid.value = uid.value
+    const history = await loadChatHistory(currentUid.value)
+    messages.value = history
+    isHistoryLoaded.value = true
+  }
+
+  // 监听用户 ID 变化，重新加载聊天记录
+  watch(uid, async (newUid) => {
+    if (newUid !== currentUid.value) {
+      console.log('[Chat] User changed, reloading chat history for:', newUid)
+      currentUid.value = newUid
+      isHistoryLoaded.value = false
+      const history = await loadChatHistory(newUid)
+      messages.value = history
+      isHistoryLoaded.value = true
+    }
+  })
+
+  // 初始化
+  initChat()
 
   // 执行工具调用
   const executeToolCall = async (toolCall: ToolCall): Promise<string> => {

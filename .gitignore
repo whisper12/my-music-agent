@@ -30,6 +30,7 @@ dist-ssr
 
 # Chat history (contains user data)
 chat_history.json
+chat_histories/
 
 # Build artifacts
 tsconfig.tsbuildinfo

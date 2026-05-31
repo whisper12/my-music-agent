@@ -410,7 +410,20 @@ app.post('/api/song-intro', async (req, res) => {
 import fs from 'fs'
 import path from 'path'
 
-const CHAT_HISTORY_FILE = path.join(__dirname, '..', 'chat_history.json')
+const CHAT_HISTORY_DIR = path.join(__dirname, '..', 'chat_histories')
+
+// 确保聊天记录目录存在
+if (!fs.existsSync(CHAT_HISTORY_DIR)) {
+  fs.mkdirSync(CHAT_HISTORY_DIR, { recursive: true })
+}
+
+// 获取聊天记录文件路径
+const getChatHistoryPath = (uid) => {
+  if (!uid) {
+    return path.join(CHAT_HISTORY_DIR, 'guest.json')
+  }
+  return path.join(CHAT_HISTORY_DIR, `user_${uid}.json`)
+}
 
 // AI 聊天对话
 app.post('/api/chat/message', async (req, res) => {
@@ -600,9 +613,11 @@ app.post('/api/chat/message', async (req, res) => {
 // 保存聊天记录
 app.post('/api/chat/save', async (req, res) => {
   try {
-    const { messages } = req.body
-    fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(messages, null, 2), 'utf-8')
-    console.log('[Chat] History saved:', messages.length, 'messages')
+    const { messages, uid } = req.body
+    const filePath = getChatHistoryPath(uid)
+
+    fs.writeFileSync(filePath, JSON.stringify(messages, null, 2), 'utf-8')
+    console.log('[Chat] History saved for user:', uid || 'guest', '→', filePath)
     res.json({ success: true })
   } catch (error) {
     console.error('[Chat] Save error:', error)
@@ -613,13 +628,16 @@ app.post('/api/chat/save', async (req, res) => {
 // 加载聊天记录
 app.get('/api/chat/load', async (req, res) => {
   try {
-    if (fs.existsSync(CHAT_HISTORY_FILE)) {
-      const data = fs.readFileSync(CHAT_HISTORY_FILE, 'utf-8')
+    const { uid } = req.query
+    const filePath = getChatHistoryPath(uid)
+
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf-8')
       const messages = JSON.parse(data)
-      console.log('[Chat] History loaded:', messages.length, 'messages')
+      console.log('[Chat] History loaded for user:', uid || 'guest', '→', messages.length, 'messages')
       res.json({ messages })
     } else {
-      console.log('[Chat] No history file found')
+      console.log('[Chat] No history file found for user:', uid || 'guest')
       res.json({ messages: [] })
     }
   } catch (error) {
